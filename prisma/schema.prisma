@@ -1,0 +1,187 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          UserRole  @default(PARTICIPANT)
+  image         String?
+  universityName String?
+  major         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  testsCreated  Test[]    @relation("TestCreator")
+  testsAttempted TestAttempt[]
+  questionsSets QuestionSet[] @relation("QuestionSetCreator")
+  testRequests  TestRequest[] @relation("UserRequests")
+  requestsReviewed TestRequest[] @relation("RequestReviewer")
+
+  @@map("users")
+}
+
+enum UserRole {
+  PARTICIPANT
+  ADMIN
+}
+
+model QuestionSet {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  subject      String
+  createdById  String
+  createdBy    User      @relation("QuestionSetCreator", fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  questions    Question[]
+  tests        Test[]    @relation("TestQuestionSet")
+
+  @@map("question_sets")
+}
+
+model Question {
+  id            String    @id @default(cuid())
+  text          String
+  type          QuestionType
+  subject       String
+  difficulty    Difficulty @default(MEDIUM)
+  options       Json?      // For multiple choice questions
+  correctAnswer String?    // For multiple choice: option id, for essay: may contain key points
+  explanation   String?
+  points        Int        @default(1)
+  nama_gambar   String?    // Stores the filename of the uploaded image
+  questionSetId String
+  questionSet   QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Relations
+  answers       Answer[]
+
+  @@map("questions")
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  ESSAY
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model Test {
+  id              String    @id @default(cuid())
+  title           String
+  description     String?
+  subject         String
+  duration        Int       // Duration in minutes
+  startTime       DateTime
+  endTime         DateTime
+  isActive        Boolean   @default(false)
+  passingScore    Int       @default(60) // Percentage score to pass
+  randomizeQuestions Boolean @default(false)
+  createdById     String
+  createdBy       User      @relation("TestCreator", fields: [createdById], references: [id])
+  questionSetId   String
+  questionSet     QuestionSet @relation("TestQuestionSet", fields: [questionSetId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  attempts        TestAttempt[]
+  requests        TestRequest[]
+
+  @@map("tests")
+}
+
+model TestAttempt {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  testId        String
+  test          Test      @relation(fields: [testId], references: [id])
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+  score         Int?
+  status        TestStatus @default(IN_PROGRESS)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  answers       Answer[]
+
+  @@map("test_attempts")
+}
+
+enum TestStatus {
+  IN_PROGRESS
+  COMPLETED
+  PASSED
+  FAILED
+}
+
+model Answer {
+  id            String    @id @default(cuid())
+  testAttemptId String
+  testAttempt   TestAttempt @relation(fields: [testAttemptId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      Question  @relation(fields: [questionId], references: [id])
+  answer        String    // For multiple choice: selected option id, for essay: text answer
+  isCorrect     Boolean?
+  score         Int?      // Points awarded for this answer
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([testAttemptId, questionId])
+  @@map("answers")
+}
+
+model TestRequest {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation("UserRequests", fields: [userId], references: [id])
+  testId          String
+  test            Test      @relation(fields: [testId], references: [id])
+  type            RequestType
+  reason          String
+  status          RequestStatus @default(PENDING)
+  feedback        String?
+  previousScore   Int?
+  previousAttempts Int?     @default(0)
+  reviewedById    String?
+  reviewedBy      User?     @relation("RequestReviewer", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("test_requests")
+}
+
+enum RequestType {
+  APPLICATION
+  RETAKE
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+} 
